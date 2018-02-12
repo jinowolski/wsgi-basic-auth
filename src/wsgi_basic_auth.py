@@ -1,6 +1,7 @@
 import os
 from base64 import b64decode
 
+from passlib.context import CryptContext
 from webob import Request
 from webob.exc import HTTPUnauthorized
 
@@ -15,7 +16,8 @@ class BasicAuth(object):
     :param users: dictionary with username -> password mapping. When not
                   supplied the values from the environment variable
                   ``WSGI_AUTH_CREDENTIALS``. If no users are defined then
-                  the middleware is disabled.
+                  the middleware is disabled. Passwords can be hashed by
+                  any scheme specified in ``hash_schemes`` parameter.
 
     :param exclude_paths: list of path prefixes to exclude from auth. When not
                           supplied the values from the ``WSGI_AUTH_EXCLUDE_PATHS``
@@ -24,11 +26,13 @@ class BasicAuth(object):
                           supplied the values from the ``WSGI_AUTH_PATHS``
                           environment variable are used (splitted by ``;``)
     :param env_prefix: prefix for the environment variables above, default ``''``
-
+    :param hash_schemes: list of password hash schemes to validate passwords.
+                         Any schemes available in ``passlib`` library can be used.
+                         Defaults to ['plaintext'] for backward compatibility.
     """
 
     def __init__(self, app, realm='Protected', users=None, exclude_paths=None,
-                 include_paths=None, env_prefix=''):
+                 include_paths=None, env_prefix='', hash_schemes=['plaintext']):
         self._app = app
         self._env_prefix = env_prefix
         self._realm = realm
@@ -37,6 +41,7 @@ class BasicAuth(object):
             exclude_paths or _exclude_paths_from_environ(env_prefix))
         self._include_paths = set(
             include_paths or _include_paths_from_environ(env_prefix))
+        self._crypt_context = CryptContext(schemes=hash_schemes)
 
     def __call__(self, environ, start_response):
         if self._users:
@@ -61,11 +66,14 @@ class BasicAuth(object):
                 if auth and auth[0] == 'Basic':
                     credentials = b64decode(auth[1]).decode('UTF-8')
                     username, password = credentials.split(':', 1)
-                    return self._users.get(username) == password
+                    return self._verify_password(password, self._users.get(username))
                 else:
                     return False
         else:
             return True
+
+    def _verify_password(self, password, hash_):
+        return self._crypt_context.verify(password, hash_)
 
     def _login(self, environ, start_response):
         """Send a login response back to the client."""

@@ -27,6 +27,7 @@ setup(
     author_email="michaelvantellingen@gmail.com",
     install_requires=[
         'webob>=1.0.0',
+        'passlib>=1.7.1',
     ],
     tests_require=tests_require,
     extras_require={

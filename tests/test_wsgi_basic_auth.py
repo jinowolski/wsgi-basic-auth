@@ -128,3 +128,16 @@ def test_include_paths_from_environ_multiple(monkeypatch):
     monkeypatch.setenv('WSGI_AUTH_PATHS', '/foo/bar;/bar/foo')
     result = wsgi_basic_auth._include_paths_from_environ()
     assert result == ['/foo/bar', '/bar/foo']
+
+
+def test_auth_hash(monkeypatch):
+    monkeypatch.setenv('WSGI_AUTH_CREDENTIALS', 'foo:$apr1$yIPw8J/l$0mPnNW9gbONm8oUgO5EUX1') # foo:bar
+    application = wsgi_basic_auth.BasicAuth(wsgi_app, hash_schemes=['apr_md5_crypt'])
+    app = TestApp(application)
+    app.get('/', status=401)
+
+    app.authorization = ('Basic', ('foo', 'baz'))
+    app.get('/', status=401)
+
+    app.authorization = ('Basic', ('foo', 'bar'))
+    app.get('/', status=200)
